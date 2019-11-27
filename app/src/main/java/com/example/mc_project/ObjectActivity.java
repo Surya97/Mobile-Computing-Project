@@ -8,6 +8,7 @@ import android.Manifest;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.LabeledIntent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -36,11 +37,14 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.concurrent.ExecutionException;
 
 public class ObjectActivity extends AppCompatActivity {
 
     private static final int PIC_REQUEST_ID = 111;
-    private static Uri imageUri;
+    public static Uri imageUri;
+    public static String objectClass = "";
+    public static TTS ttsObject;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -58,6 +62,7 @@ public class ObjectActivity extends AppCompatActivity {
                     new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
                     200);
         }
+        ttsObject = new TTS();
 
     }
     public void startCapture(View view){
@@ -76,14 +81,19 @@ public class ObjectActivity extends AppCompatActivity {
                     }
                     Log.d("Image URI: ", imageUri.toString());
                     File imageFile = new File(getRealPathFromURI(imageUri));
-
-                    ObjectClassify classification = new ObjectClassify();
-                    classification.execute(imageFile);
+                    classifyImage(imageFile);
+//                    TTSHelper.getInstance(this).speak("The object is " + objectClass);
                 }
                 Toast.makeText(ObjectActivity.this, "Data response is null", Toast.LENGTH_LONG);
 
             }
         }
+
+    }
+    public void classifyImage(File imageFile){
+        ObjectClassify classification = new ObjectClassify();
+        classification.execute(imageFile);
+        Log.d("ObjectClass", objectClass);
     }
     public Uri getImageUri(Context inContext, Bitmap inImage) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -114,7 +124,7 @@ public class ObjectActivity extends AppCompatActivity {
             try{
                 InputStream imageStream = new FileInputStream(imageFile);
                 ClassifyOptions classifyOptions = new ClassifyOptions.Builder()
-                        .imagesFile(imageStream).imagesFilename("wall")
+                        .imagesFile(imageStream).imagesFilename(imageFile.toString())
                         .classifierIds(Arrays.asList("default"))
                         .build();
                 ClassifiedImages result = visualRecognition.classify(classifyOptions).execute().getResult();
@@ -134,16 +144,22 @@ public class ObjectActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(String objectClass){
-            TTS tts = new TTS();
-            Toast.makeText(ObjectActivity.this, "Object TTS "+ objectClass, Toast.LENGTH_LONG);
-            Log.d("Object Class", objectClass);
-            tts.textToSpeech("The object is " + objectClass);
+            ObjectActivity.objectClass = objectClass;
+//            Intent ttsIntent = new Intent(ObjectActivity.this, TTSActivity.class);
+//            ttsIntent.putExtra("ImageURI", ObjectActivity.imageUri);
+//            ttsIntent.putExtra("ObjectClass", objectClass);
+//            startActivity(ttsIntent);
+            objectClass = "The object is "+ objectClass;
+            ObjectActivity.ttsObject.textToSpeech(objectClass);
         }
     }
 
     private class TTS{
         private TextToSpeech textToSpeech;
         public TTS(){
+            if(textToSpeech!=null){
+                textToSpeech.stop();
+            }
             textToSpeech = new TextToSpeech(getApplicationContext(), new android.speech.tts.TextToSpeech.OnInitListener() {
                 @Override
                 public void onInit(int status) {
@@ -165,6 +181,8 @@ public class ObjectActivity extends AppCompatActivity {
 
         }
         public void textToSpeech(String text){
+            Log.d("TTS", "TTS Speak working");
+            Log.d("TTS", "Text to speak is "+ text);
             int speechStatus = textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null);
 
             if (speechStatus == TextToSpeech.ERROR) {
