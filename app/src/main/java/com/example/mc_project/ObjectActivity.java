@@ -5,6 +5,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.content.ActivityNotFoundException;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
@@ -12,6 +13,7 @@ import android.content.pm.LabeledIntent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -23,6 +25,8 @@ import android.speech.tts.TextToSpeech;
 import android.text.method.Touch;
 import android.util.Log;
 import android.view.View;
+import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.ibm.cloud.sdk.core.security.IamAuthenticator;
@@ -45,6 +49,8 @@ public class ObjectActivity extends AppCompatActivity {
     public static Uri imageUri;
     public static String objectClass = "";
     public static TTS ttsObject;
+    public static ImageView objView;
+    public static TextView objectClassView;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -62,6 +68,8 @@ public class ObjectActivity extends AppCompatActivity {
                     new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
                     200);
         }
+        objView = (ImageView) findViewById(R.id.objectImage);
+        objectClassView = (TextView) findViewById(R.id.objectClassView);
         ttsObject = new TTS();
 
     }
@@ -79,8 +87,11 @@ public class ObjectActivity extends AppCompatActivity {
                     if(imageUri !=null){
 
                     }
+                    photo = Bitmap.createScaledBitmap(photo, 150, 150, false);
+                    imageUri = getImageUri(getApplicationContext(), photo);
                     Log.d("Image URI: ", imageUri.toString());
                     File imageFile = new File(getRealPathFromURI(imageUri));
+                    objView.setImageBitmap(photo);
                     classifyImage(imageFile);
 //                    TTSHelper.getInstance(this).speak("The object is " + objectClass);
                 }
@@ -128,7 +139,9 @@ public class ObjectActivity extends AppCompatActivity {
                         .classifierIds(Arrays.asList("default"))
                         .build();
                 ClassifiedImages result = visualRecognition.classify(classifyOptions).execute().getResult();
-                output = result.getImages().get(0).getClassifiers().get(0).getClasses().get(0).getXClass();
+
+                Log.d("Classification result ",result.toString());
+                output = result.getImages().get(0).getClassifiers().get(0).getClasses().get(1).getXClass();
             }catch(FileNotFoundException ex){
                 Toast.makeText(ObjectActivity.this, "Image File not found",
                         Toast.LENGTH_LONG);
@@ -150,6 +163,7 @@ public class ObjectActivity extends AppCompatActivity {
 //            ttsIntent.putExtra("ObjectClass", objectClass);
 //            startActivity(ttsIntent);
             objectClass = "The object is "+ objectClass;
+            ObjectActivity.objectClassView.setText(objectClass);
             ObjectActivity.ttsObject.textToSpeech(objectClass);
         }
     }
