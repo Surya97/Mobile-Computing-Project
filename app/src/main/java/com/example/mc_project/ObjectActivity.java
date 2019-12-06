@@ -5,6 +5,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ContentUris;
 import android.content.Context;
@@ -14,6 +15,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -39,7 +41,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 
@@ -51,29 +55,22 @@ public class ObjectActivity extends AppCompatActivity {
     public static TTS ttsObject;
     public static ImageView objView;
     public static TextView objectClassView;
+    public static int PIC_CROP = 101;
+    public static final int REQUEST_ID_MULTIPLE_PERMISSIONS = 121;
+    public static final String TAG = "WRTE_PERMISSION";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_object);
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED){
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 200);
-        }
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
-                    200);
-        }
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                    200);
-        }
         objView = (ImageView) findViewById(R.id.objectImage);
         objectClassView = (TextView) findViewById(R.id.objectClassView);
         ttsObject = new TTS();
-
+        if(checkAndRequestPermissions(ObjectActivity.this)){
+            Toast.makeText(getApplicationContext(), "Permissions given", Toast.LENGTH_LONG);
+        }
     }
     public void startCapture(View view){
+
         Intent camera = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         startActivityForResult(camera, PIC_REQUEST_ID);
     }
@@ -83,14 +80,20 @@ public class ObjectActivity extends AppCompatActivity {
             if(resultCode == RESULT_OK) {
                 if(data!=null){
                     Bitmap photo = (Bitmap) data.getExtras().get("data");
-                    imageUri = getImageUri(getApplicationContext(), photo);
-                    if(imageUri !=null){
 
-                    }
-                    photo = Bitmap.createScaledBitmap(photo, 150, 150, false);
+                    //Remove Noise
+//                    photo = RemoveNoise(photo);
+
+                    //Create a scaled image for image compression
+//                    photo = Bitmap.createScaledBitmap(photo, 150, 150, false);
                     imageUri = getImageUri(getApplicationContext(), photo);
+
+                    //Crop the image
+//                    cropImage(imageUri);
+
                     Log.d("Image URI: ", imageUri.toString());
                     File imageFile = new File(getRealPathFromURI(imageUri));
+
                     objView.setImageBitmap(photo);
                     classifyImage(imageFile);
 //                    TTSHelper.getInstance(this).speak("The object is " + objectClass);
@@ -100,6 +103,103 @@ public class ObjectActivity extends AppCompatActivity {
             }
         }
 
+    }
+
+    public boolean checkAndRequestPermissions(final Activity context) {
+        int ExtstorePermission = ContextCompat.checkSelfPermission(context,
+                Manifest.permission.READ_EXTERNAL_STORAGE);
+        int cameraPermission = ContextCompat.checkSelfPermission(context,
+                Manifest.permission.CAMERA);
+        int WExtstorePermission = ContextCompat.checkSelfPermission( context, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        List<String> listPermissionsNeeded = new ArrayList<>();
+        if (cameraPermission != PackageManager.PERMISSION_GRANTED) {
+            listPermissionsNeeded.add(Manifest.permission.CAMERA);
+        }
+        if (WExtstorePermission != PackageManager.PERMISSION_GRANTED) {
+            listPermissionsNeeded
+                    .add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+        if (!listPermissionsNeeded.isEmpty()) {
+            ActivityCompat.requestPermissions(context, listPermissionsNeeded
+                            .toArray(new String[listPermissionsNeeded.size()]),
+                    REQUEST_ID_MULTIPLE_PERMISSIONS);
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,String[] permissions, int[] grantResults) {
+        switch (requestCode) {
+            case ObjectActivity.REQUEST_ID_MULTIPLE_PERMISSIONS:
+                if (ContextCompat.checkSelfPermission(ObjectActivity.this,
+                        Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(getApplicationContext(),
+                            "FlagUp Requires Access to Camara.", Toast.LENGTH_SHORT)
+                            .show();
+                    finish();
+                } else if (ContextCompat.checkSelfPermission(ObjectActivity.this,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(getApplicationContext(),
+                            "FlagUp Requires Access to Your Storage.",
+                            Toast.LENGTH_SHORT).show();
+                    finish();
+                } else {
+                    Toast.makeText(getApplicationContext(), "Permissions not set", Toast.LENGTH_LONG);
+                }
+                break;
+        }
+    }
+
+    public Bitmap RemoveNoise(Bitmap bmap) {
+        for (int x = 0; x < bmap.getWidth(); x++) {
+            for (int y = 0; y < bmap.getHeight(); y++) {
+                int pixel = bmap.getPixel(x, y);
+                int R = Color.red(pixel);
+                int G = Color.green(pixel);
+                int B = Color.blue(pixel);
+                if (R < 162 && G < 162 && B < 162)
+                    bmap.setPixel(x, y, Color.BLACK);
+            }
+        }
+        for (int  x = 0; x < bmap.getWidth(); x++) {
+            for (int y = 0; y < bmap.getHeight(); y++) {
+                int pixel = bmap.getPixel(x, y);
+                int R = Color.red(pixel);
+                int G = Color.green(pixel);
+                int B = Color.blue(pixel);
+                if (R > 162 && G > 162 && B > 162)
+                    bmap.setPixel(x, y, Color.WHITE);
+            }
+        }
+        return bmap;
+    }
+
+    public void cropImage(Uri picUri){
+        try {
+            Intent cropIntent = new Intent("com.android.camera.action.CROP");
+            // indicate image type and Uri
+            cropIntent.setDataAndType(picUri, "image/*");
+            // set crop properties here
+            cropIntent.putExtra("crop", true);
+            // indicate aspect of desired crop
+            cropIntent.putExtra("aspectX", 1);
+            cropIntent.putExtra("aspectY", 1);
+            // indicate output X and Y
+            cropIntent.putExtra("outputX", 128);
+            cropIntent.putExtra("outputY", 128);
+            // retrieve data on return
+            cropIntent.putExtra("return-data", true);
+            // start the activity - we handle returning in onActivityResult
+            startActivityForResult(cropIntent, PIC_CROP);
+        }
+        // respond to users whose devices do not support the crop action
+        catch (ActivityNotFoundException anfe) {
+            // display an error message
+            String errorMessage = "Whoops - your device doesn't support the crop action!";
+            Toast toast = Toast.makeText(this, errorMessage, Toast.LENGTH_SHORT);
+            toast.show();
+        }
     }
     public void classifyImage(File imageFile){
         ObjectClassify classification = new ObjectClassify();
@@ -158,10 +258,6 @@ public class ObjectActivity extends AppCompatActivity {
         @Override
         protected void onPostExecute(String objectClass){
             ObjectActivity.objectClass = objectClass;
-//            Intent ttsIntent = new Intent(ObjectActivity.this, TTSActivity.class);
-//            ttsIntent.putExtra("ImageURI", ObjectActivity.imageUri);
-//            ttsIntent.putExtra("ObjectClass", objectClass);
-//            startActivity(ttsIntent);
             objectClass = "The object is "+ objectClass;
             ObjectActivity.objectClassView.setText(objectClass);
             ObjectActivity.ttsObject.textToSpeech(objectClass);
